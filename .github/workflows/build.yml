@@ -1,0 +1,52 @@
+name: Nokia build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build Shaxmat.jar (CLDC 1.1 / MIDP 2.0)
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Upload jar and jad
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shaxmat-jar
+          path: |
+            build/dist/Shaxmat.jar
+            build/dist/Shaxmat.jad
+          if-no-files-found: error
+
+      - name: Engine tests (perft, tactics)
+        run: |
+          javac -nowarn -cp build/check -d build/test test/EngineTest.java
+          java -cp build/check:build/test EngineTest
+
+      - name: UI tests (desktop MIDP emulator)
+        timeout-minutes: 20
+        run: |
+          mkdir -p build/shots
+          javac -nowarn -cp build/check:build/midp -d build/test test/UiTest.java
+          java -Djava.awt.headless=true -cp build/check:build/midp:build/test UiTest build/shots
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: build/shots
+          if-no-files-found: ignore
